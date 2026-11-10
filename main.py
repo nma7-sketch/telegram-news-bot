@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 from telegram.error import TelegramError
 import asyncio
+import tempfile
 
 # Setup logging
 logging.basicConfig(
@@ -101,11 +102,89 @@ class NewsBot:
         logger.info(f"Found {len(items)} file/video resources (filtered out generic links).")
         return items
 
+    async def download_and_upload_pdf(self, pdf_url, title, description):
+        """Download PDF and upload directly to Telegram"""
+        logger.info(f"📥 Downloading PDF: {pdf_url}")
+        
+        try:
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(pdf_url, headers=headers, timeout=30)
+            response.raise_for_status()
+            
+            # Check file size (Telegram limit is 50MB for bots)
+            file_size_mb = len(response.content) / (1024 * 1024)
+            logger.info(f"PDF size: {file_size_mb:.2f} MB")
+            
+            if file_size_mb > 50:
+                logger.warning(f"⚠️ PDF too large ({file_size_mb:.2f} MB), sending as link instead")
+                return False
+            
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
+                tmp_file.write(response.content)
+                tmp_path = tmp_file.name
+            
+            logger.info(f"📤 Uploading PDF to Telegram: {title}")
+            
+            # Clean description for caption
+            clean_desc = description[:1000] if len(description) > 1000 else description
+            caption = f"📂 <b>{title}</b>\n\n{clean_desc}"
+            
+            # Upload to Telegram
+            with open(tmp_path, 'rb') as pdf_file:
+                await self.bot.send_document(
+                    chat_id=CHANNEL_ID,
+                    document=pdf_file,
+                    caption=caption,
+                    parse_mode='HTML',
+                    disable_notification=False
+                )
+            
+            # Clean up temp file
+            os.unlink(tmp_path)
+            logger.info(f"✅ Successfully uploaded PDF: {title}")
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Failed to download PDF: {e}")
+            return False
+        except TelegramError as e:
+            logger.error(f"❌ Telegram upload error: {e.message}")
+            return False
+        except Exception as e:
+            logger.error(f" Unexpected error uploading PDF: {e}")
+            return False
+        finally:
+            # Ensure temp file is deleted if it exists
+            if 'tmp_path' in locals() and os.path.exists(tmp_path):
+                try:
+                    os.unlink(tmp_path)
+                except:
+                    pass
+
     async def send_resource(self, title, description, link):
+        """Send resource - upload PDFs directly, send videos/other as links"""
+        
+        # Check if it's a PDF link
+        if link.lower().endswith('.pdf'):
+            logger.info(f" Detected PDF, attempting direct upload: {title}")
+            success = await self.download_and_upload_pdf(link, title, description)
+            
+            if not success:
+                # Fallback: send as link if upload fails
+                logger.info(f"️ Upload failed, sending as link instead")
+                return await self.send_as_link(title, description, link)
+            return success
+        else:
+            # For videos and other resources, send as link
+            return await self.send_as_link(title, description, link)
+
+    async def send_as_link(self, title, description, link):
+        """Send resource as a clickable link"""
         try:
             message = f"📂 <b>{title}</b>\n\n"
             message += f"{description}\n\n"
-            message += f"🔗 <a href='{link}'>Access File/Video</a>"
+            message += f"🔗 <a href='{link}'>Access Resource</a>"
             
             await self.bot.send_message(
                 chat_id=CHANNEL_ID,
@@ -113,7 +192,7 @@ class NewsBot:
                 parse_mode='HTML',
                 disable_web_page_preview=False
             )
-            logger.info(f"✅ Posted: {title}")
+            logger.info(f"✅ Posted link: {title}")
             return True
         except TelegramError as e:
             logger.error(f"❌ Telegram Error posting {title}: {e.message}")
@@ -124,7 +203,7 @@ class NewsBot:
 
 async def main():
     logger.info("=" * 50)
-    logger.info("🚀 STARTING HFT.MD FILE/VIDEO SCRAPER BOT")
+    logger.info("🚀 STARTING HFT.MD PDF UPLOADER BOT")
     logger.info("=" * 50)
     
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -145,13 +224,13 @@ async def main():
             if success:
                 bot.posted_links.append(item['link'])
                 new_posts_count += 1
-                await asyncio.sleep(2) # Prevent Telegram rate limiting
+                await asyncio.sleep(3) # Slightly longer delay for uploads
     
     if new_posts_count > 0:
         bot.save_posted_links()
-        logger.info(f"✅ Successfully posted {new_posts_count} new file/video resources!")
+        logger.info(f"✅ Successfully posted {new_posts_count} new resources!")
     else:
-        logger.info("ℹ️ No new file/video resources to post (all already shared).")
+        logger.info("ℹ️ No new resources to post (all already shared).")
     
     logger.info("=" * 50)
     logger.info("✅ Bot execution completed successfully!")
