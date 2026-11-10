@@ -110,7 +110,7 @@ class GlobalIntelligenceBot:
                 for item in items:
                     # Clean up title
                     title = item['title'][:100]
-                    pdf.multi_cell(0, 6, f"• {title}")
+                       pdf.multi_cell(0, 6, f"- {title}")
                     pdf.set_text_color(0, 0, 255)
                     pdf.cell(0, 6, f"  Link: {item['link'][:80]}...", ln=True)
                     pdf.set_text_color(0, 0, 0)
