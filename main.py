@@ -28,7 +28,7 @@ class NewsBot:
         try:
             with open(self.posted_links_file, 'r') as f:
                 self.posted_links = json.load(f)
-                logger.info(f"Loaded {len(self.posted_links)} posted links")
+                logger.info(f"Loaded {len(self.posted_links)} posted resources")
         except FileNotFoundError:
             self.posted_links = []
             logger.info("No posted links file found, starting fresh")
@@ -36,10 +36,28 @@ class NewsBot:
     def save_posted_links(self):
         with open(self.posted_links_file, 'w') as f:
             json.dump(self.posted_links, f, indent=2)
-        logger.info("Saved posted links")
+        logger.info("Saved posted resources")
+
+    def is_file_or_video(self, title, description, link):
+        """Filter to ONLY allow actual files (PDFs) and Videos/Talks"""
+        title_lower = title.lower()
+        desc_lower = description.lower()
+        link_lower = link.lower()
+        
+        # 1. Direct file links (PDFs, Zips, CSVs, Videos)
+        file_extensions = ['.pdf', '.mp4', '.mkv', '.avi', '.zip', '.csv', '.xlsx']
+        if any(link_lower.endswith(ext) for ext in file_extensions):
+            return True
+            
+        # 2. Strong keywords indicating a video, talk, or document
+        media_keywords = ['video', 'talk', 'pdf', 'guide', 'primer', 'book', 'interview']
+        if any(keyword in title_lower or keyword in desc_lower for keyword in media_keywords):
+            return True
+            
+        return False
 
     def scrape_hft_md(self):
-        """Scrape resources from hft.md/jane-street/"""
+        """Scrape ONLY files and videos from hft.md/jane-street/"""
         logger.info(f"Scraping {TARGET_URL}...")
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         
@@ -54,7 +72,6 @@ class NewsBot:
         items = []
         seen_titles = set()
 
-        # Find all headings which typically contain the resource titles
         for tag in soup.find_all(['h2', 'h3', 'h4']):
             title = tag.get_text(strip=True)
             if not title or len(title) < 5 or title in seen_titles:
@@ -76,19 +93,19 @@ class NewsBot:
                 if len(desc) > 250:
                     desc = desc[:250] + "..."
             
-            if title and link:
+            # APPLY THE FILTER HERE
+            if title and link and self.is_file_or_video(title, desc, link):
                 items.append({"title": title, "desc": desc, "link": link})
                 seen_titles.add(title)
 
-        logger.info(f"Found {len(items)} resources on the page.")
+        logger.info(f"Found {len(items)} file/video resources (filtered out generic links).")
         return items
 
-    async def send_news(self, title, description, link):
+    async def send_resource(self, title, description, link):
         try:
-            # Using HTML parse mode for safer formatting
-            message = f"📰 <b>{title}</b>\n\n"
+            message = f"📂 <b>{title}</b>\n\n"
             message += f"{description}\n\n"
-            message += f"🔗 <a href='{link}'>Access Resource</a>"
+            message += f"🔗 <a href='{link}'>Access File/Video</a>"
             
             await self.bot.send_message(
                 chat_id=CHANNEL_ID,
@@ -107,7 +124,7 @@ class NewsBot:
 
 async def main():
     logger.info("=" * 50)
-    logger.info("🚀 STARTING HFT.MD SCRAPER BOT")
+    logger.info("🚀 STARTING HFT.MD FILE/VIDEO SCRAPER BOT")
     logger.info("=" * 50)
     
     if not BOT_TOKEN or not CHANNEL_ID:
@@ -115,30 +132,26 @@ async def main():
         return
     
     bot = NewsBot()
-    
-    # 1. Scrape the website
     resources = bot.scrape_hft_md()
     
     if not resources:
-        logger.warning("⚠️ No resources found or scraping failed.")
+        logger.warning("⚠️ No file/video resources found or scraping failed.")
         return
 
-    # 2. Filter out already posted links and send new ones
     new_posts_count = 0
     for item in resources:
         if item['link'] not in bot.posted_links:
-            success = await bot.send_news(item['title'], item['desc'], item['link'])
+            success = await bot.send_resource(item['title'], item['desc'], item['link'])
             if success:
                 bot.posted_links.append(item['link'])
                 new_posts_count += 1
                 await asyncio.sleep(2) # Prevent Telegram rate limiting
     
-    # 3. Save progress
     if new_posts_count > 0:
         bot.save_posted_links()
-        logger.info(f"✅ Successfully posted {new_posts_count} new resources!")
+        logger.info(f"✅ Successfully posted {new_posts_count} new file/video resources!")
     else:
-        logger.info("ℹ️ No new resources to post (all already shared).")
+        logger.info("ℹ️ No new file/video resources to post (all already shared).")
     
     logger.info("=" * 50)
     logger.info("✅ Bot execution completed successfully!")
