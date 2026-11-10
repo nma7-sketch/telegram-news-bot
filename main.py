@@ -7,6 +7,7 @@ from telegram import Bot
 from telegram.error import TelegramError
 import asyncio
 import tempfile
+from urllib.parse import urljoin, urlparse
 
 # Setup logging
 logging.basicConfig(
@@ -17,9 +18,21 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHANNEL_ID = os.getenv('CHANNEL_ID')
-TARGET_URL = "https://hft.md/jane-street/"
 
-class NewsBot:
+# Define our Wall Street Sources
+TARGET_SOURCES = {
+    "Jane Street": "https://www.janestreet.com/insights/",
+    "AQR Capital": "https://www.aqr.com/Insights",
+    "Bridgewater": "https://www.bridgewater.com/research-and-insights",
+    "BlackRock": "https://www.blackrock.com/us/individual/insights",
+    "Citadel Securities": "https://www.citadelsecurities.com/insights/"
+}
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+}
+
+class WallStreetBot:
     def __init__(self):
         self.bot = Bot(token=BOT_TOKEN)
         self.posted_links_file = 'posted_links.json'
@@ -29,161 +42,123 @@ class NewsBot:
         try:
             with open(self.posted_links_file, 'r') as f:
                 self.posted_links = json.load(f)
-                logger.info(f"Loaded {len(self.posted_links)} posted resources")
         except FileNotFoundError:
             self.posted_links = []
-            logger.info("No posted links file found, starting fresh")
-    
+
     def save_posted_links(self):
         with open(self.posted_links_file, 'w') as f:
             json.dump(self.posted_links, f, indent=2)
-        logger.info("Saved posted resources")
 
-    def is_file_or_video(self, title, description, link):
-        """Filter to ONLY allow actual files (PDFs) and Videos/Talks"""
-        title_lower = title.lower()
-        desc_lower = description.lower()
-        link_lower = link.lower()
+    def is_relevant_resource(self, text, href):
+        """Filter out navigation links and only keep real research/PDFs/Videos"""
+        text_lower = text.lower()
+        href_lower = href.lower()
         
-        # 1. Direct file links (PDFs, Zips, CSVs, Videos)
-        file_extensions = ['.pdf', '.mp4', '.mkv', '.avi', '.zip', '.csv', '.xlsx']
-        if any(link_lower.endswith(ext) for ext in file_extensions):
+        # 1. Direct file links
+        if href_lower.endswith('.pdf') or href_lower.endswith('.mp4'):
             return True
             
-        # 2. Strong keywords indicating a video, talk, or document
-        media_keywords = ['video', 'talk', 'pdf', 'guide', 'primer', 'book', 'interview']
-        if any(keyword in title_lower or keyword in desc_lower for keyword in media_keywords):
+        # 2. Keywords indicating a real research paper, video, or report
+        keywords = ['research', 'insight', 'report', 'outlook', 'video', 'whitepaper', 'guide', 'market']
+        
+        # Must have a keyword in the text or URL, and be long enough to be a title
+        if len(text) > 15 and any(k in text_lower or k in href_lower for k in keywords):
             return True
             
         return False
 
-    def scrape_hft_md(self):
-        """Scrape ONLY files and videos from hft.md/jane-street/"""
-        logger.info(f"Scraping {TARGET_URL}...")
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    def scrape_all_sources(self):
+        """Scrape PDFs and Videos from all Wall Street sources"""
+        all_resources = []
         
-        try:
-            response = requests.get(TARGET_URL, headers=headers, timeout=10)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to fetch webpage: {e}")
-            return []
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-        items = []
-        seen_titles = set()
-
-        for tag in soup.find_all(['h2', 'h3', 'h4']):
-            title = tag.get_text(strip=True)
-            if not title or len(title) < 5 or title in seen_titles:
-                continue
+        for source_name, url in TARGET_SOURCES.items():
+            logger.info(f"🕵️ Scraping {source_name}...")
+            try:
+                response = requests.get(url, headers=HEADERS, timeout=15)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                found_count = 0
+                for a_tag in soup.find_all('a', href=True):
+                    href = a_tag['href']
+                    text = a_tag.get_text(strip=True)
+                    
+                    # Resolve relative URLs
+                    full_url = urljoin(url, href)
+                    
+                    # Ensure it's an external link to a resource, not an internal nav link
+                    if self.is_relevant_resource(text, full_url):
+                        # Avoid duplicates within the same page
+                        if not any(r['link'] == full_url for r in all_resources):
+                            all_resources.append({
+                                "title": text,
+                                "link": full_url,
+                                "source": source_name
+                            })
+                            found_count += 1
+                            
+                logger.info(f"✅ Found {found_count} resources from {source_name}")
+                
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to scrape {source_name}: {e}")
             
-            parent = tag.parent
-            a_tag = parent.find('a')
+            # Be polite to servers
+            asyncio.sleep(2) 
             
-            link = ""
-            if a_tag and a_tag.get('href'):
-                link = a_tag['href']
-                if not link.startswith('http'):
-                    link = "https://hft.md" + link
-            
-            desc = ""
-            p_tags = parent.find_all('p')
-            if p_tags:
-                desc = p_tags[0].get_text(strip=True)
-                if len(desc) > 250:
-                    desc = desc[:250] + "..."
-            
-            # APPLY THE FILTER HERE
-            if title and link and self.is_file_or_video(title, desc, link):
-                items.append({"title": title, "desc": desc, "link": link})
-                seen_titles.add(title)
+        logger.info(f"📊 Total unique resources found: {len(all_resources)}")
+        return all_resources
 
-        logger.info(f"Found {len(items)} file/video resources (filtered out generic links).")
-        return items
-
-    async def download_and_upload_pdf(self, pdf_url, title, description):
+    async def download_and_upload_pdf(self, pdf_url, title, source):
         """Download PDF and upload directly to Telegram"""
-        logger.info(f"📥 Downloading PDF: {pdf_url}")
-        
         try:
-            headers = {"User-Agent": "Mozilla/5.0"}
-            response = requests.get(pdf_url, headers=headers, timeout=30)
+            response = requests.get(pdf_url, headers=HEADERS, timeout=30)
             response.raise_for_status()
             
-            # Check file size (Telegram limit is 50MB for bots)
             file_size_mb = len(response.content) / (1024 * 1024)
-            logger.info(f"PDF size: {file_size_mb:.2f} MB")
-            
             if file_size_mb > 50:
-                logger.warning(f"⚠️ PDF too large ({file_size_mb:.2f} MB), sending as link instead")
+                logger.warning(f"⚠️ PDF too large ({file_size_mb:.2f} MB): {title}")
                 return False
             
-            # Create temporary file
             with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
                 tmp_file.write(response.content)
                 tmp_path = tmp_file.name
             
-            logger.info(f"📤 Uploading PDF to Telegram: {title}")
+            caption = f"🏦 <b>Source: {source}</b>\n\n📂 <b>{title}</b>"
             
-            # Clean description for caption
-            clean_desc = description[:1000] if len(description) > 1000 else description
-            caption = f"📂 <b>{title}</b>\n\n{clean_desc}"
-            
-            # Upload to Telegram
             with open(tmp_path, 'rb') as pdf_file:
                 await self.bot.send_document(
                     chat_id=CHANNEL_ID,
                     document=pdf_file,
                     caption=caption,
-                    parse_mode='HTML',
-                    disable_notification=False
+                    parse_mode='HTML'
                 )
             
-            # Clean up temp file
             os.unlink(tmp_path)
-            logger.info(f"✅ Successfully uploaded PDF: {title}")
             return True
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ Failed to download PDF: {e}")
-            return False
-        except TelegramError as e:
-            logger.error(f"❌ Telegram upload error: {e.message}")
-            return False
         except Exception as e:
-            logger.error(f" Unexpected error uploading PDF: {e}")
+            logger.error(f"❌ PDF Upload failed for {title}: {e}")
             return False
-        finally:
-            # Ensure temp file is deleted if it exists
-            if 'tmp_path' in locals() and os.path.exists(tmp_path):
-                try:
-                    os.unlink(tmp_path)
-                except:
-                    pass
 
-    async def send_resource(self, title, description, link):
+    async def send_resource(self, item):
         """Send resource - upload PDFs directly, send videos/other as links"""
+        title = item['title']
+        link = item['link']
+        source = item['source']
         
-        # Check if it's a PDF link
         if link.lower().endswith('.pdf'):
-            logger.info(f" Detected PDF, attempting direct upload: {title}")
-            success = await self.download_and_upload_pdf(link, title, description)
-            
+            success = await self.download_and_upload_pdf(link, title, source)
             if not success:
-                # Fallback: send as link if upload fails
-                logger.info(f"️ Upload failed, sending as link instead")
-                return await self.send_as_link(title, description, link)
+                return await self.send_as_link(title, link, source)
             return success
         else:
-            # For videos and other resources, send as link
-            return await self.send_as_link(title, description, link)
+            return await self.send_as_link(title, link, source)
 
-    async def send_as_link(self, title, description, link):
+    async def send_as_link(self, title, link, source):
         """Send resource as a clickable link"""
         try:
-            message = f"📂 <b>{title}</b>\n\n"
-            message += f"{description}\n\n"
+            message = f"🏦 <b>Source: {source}</b>\n\n"
+            message += f"📂 <b>{title}</b>\n\n"
             message += f"🔗 <a href='{link}'>Access Resource</a>"
             
             await self.bot.send_message(
@@ -192,48 +167,40 @@ class NewsBot:
                 parse_mode='HTML',
                 disable_web_page_preview=False
             )
-            logger.info(f"✅ Posted link: {title}")
             return True
-        except TelegramError as e:
-            logger.error(f"❌ Telegram Error posting {title}: {e.message}")
-            return False
         except Exception as e:
-            logger.error(f"❌ Unexpected error posting {title}: {e}")
+            logger.error(f"❌ Link post failed: {e}")
             return False
 
 async def main():
     logger.info("=" * 50)
-    logger.info("🚀 STARTING HFT.MD PDF UPLOADER BOT")
+    logger.info("🚀 STARTING WALL STREET MULTI-SOURCE BOT")
     logger.info("=" * 50)
     
     if not BOT_TOKEN or not CHANNEL_ID:
-        logger.error("❌ Missing BOT_TOKEN or CHANNEL_ID in environment variables!")
+        logger.error("❌ Missing BOT_TOKEN or CHANNEL_ID!")
         return
     
-    bot = NewsBot()
-    resources = bot.scrape_hft_md()
+    bot = WallStreetBot()
+    resources = bot.scrape_all_sources()
     
-    if not resources:
-        logger.warning("⚠️ No file/video resources found or scraping failed.")
-        return
-
     new_posts_count = 0
     for item in resources:
         if item['link'] not in bot.posted_links:
-            success = await bot.send_resource(item['title'], item['desc'], item['link'])
+            success = await bot.send_resource(item)
             if success:
                 bot.posted_links.append(item['link'])
                 new_posts_count += 1
-                await asyncio.sleep(3) # Slightly longer delay for uploads
+                await asyncio.sleep(3) # Prevent rate limiting
     
     if new_posts_count > 0:
         bot.save_posted_links()
-        logger.info(f"✅ Successfully posted {new_posts_count} new resources!")
+        logger.info(f"✅ Successfully posted {new_posts_count} new Wall Street resources!")
     else:
-        logger.info("ℹ️ No new resources to post (all already shared).")
+        logger.info("ℹ️ No new resources to post.")
     
     logger.info("=" * 50)
-    logger.info("✅ Bot execution completed successfully!")
+    logger.info("✅ Bot execution completed!")
 
 if __name__ == '__main__':
     asyncio.run(main())
