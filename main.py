@@ -6,33 +6,40 @@ from bs4 import BeautifulSoup
 from telegram import Bot
 from telegram.error import TelegramError
 import asyncio
-import tempfile
-from urllib.parse import urljoin, urlparse
+from fpdf import FPDF
+from datetime import datetime
+from urllib.parse import urljoin
 
-# Setup logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHANNEL_ID = os.getenv('CHANNEL_ID')
 
-# Define our Wall Street Sources
+# Global Fund Managers Database
 TARGET_SOURCES = {
-    "Jane Street": "https://www.janestreet.com/insights/",
-    "AQR Capital": "https://www.aqr.com/Insights",
-    "Bridgewater": "https://www.bridgewater.com/research-and-insights",
-    "BlackRock": "https://www.blackrock.com/us/individual/insights",
-    "Citadel Securities": "https://www.citadelsecurities.com/insights/"
+    # USA
+    "BlackRock (USA)": "https://www.blackrock.com/us/individual/insights",
+    "Vanguard (USA)": "https://investor.vanguard.com/investor-resources-education/market-commentary",
+    "Bridgewater (USA)": "https://www.bridgewater.com/research-and-insights",
+    "AQR Capital (USA)": "https://www.aqr.com/Insights",
+    # Middle East
+    "PIF (Saudi Arabia)": "https://www.pif.gov.sa/en/media-center/press-releases/",
+    "Mubadala (UAE)": "https://www.mubadala.com/en/media/media-centre",
+    "ADIA (UAE)": "https://www.adia.ae/en/media/press-releases.aspx",
+    # Asia
+    "GIC (Singapore)": "https://www.gic.com.sg/insights",
+    "Temasek (Singapore)": "https://www.temasek.com.sg/en/news-and-insights",
+    "Nomura (Japan)": "https://www.nomura.com/insights/",
+    # Europe
+    "Amundi (France)": "https://www.amundi.com/insights",
+    "Allianz GI (Germany)": "https://www.allianzgi.com/insights",
+    "Legal & General (UK)": "https://www.lgim.com/insights"
 }
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
-class WallStreetBot:
+class GlobalIntelligenceBot:
     def __init__(self):
         self.bot = Bot(token=BOT_TOKEN)
         self.posted_links_file = 'posted_links.json'
@@ -40,37 +47,14 @@ class WallStreetBot:
     
     def load_posted_links(self):
         try:
-            with open(self.posted_links_file, 'r') as f:
-                self.posted_links = json.load(f)
-        except FileNotFoundError:
-            self.posted_links = []
+            with open(self.posted_links_file, 'r') as f: self.posted_links = json.load(f)
+        except FileNotFoundError: self.posted_links = []
 
     def save_posted_links(self):
-        with open(self.posted_links_file, 'w') as f:
-            json.dump(self.posted_links, f, indent=2)
-
-    def is_relevant_resource(self, text, href):
-        """Filter out navigation links and only keep real research/PDFs/Videos"""
-        text_lower = text.lower()
-        href_lower = href.lower()
-        
-        # 1. Direct file links
-        if href_lower.endswith('.pdf') or href_lower.endswith('.mp4'):
-            return True
-            
-        # 2. Keywords indicating a real research paper, video, or report
-        keywords = ['research', 'insight', 'report', 'outlook', 'video', 'whitepaper', 'guide', 'market']
-        
-        # Must have a keyword in the text or URL, and be long enough to be a title
-        if len(text) > 15 and any(k in text_lower or k in href_lower for k in keywords):
-            return True
-            
-        return False
+        with open(self.posted_links_file, 'w') as f: json.dump(self.posted_links, f, indent=2)
 
     def scrape_all_sources(self):
-        """Scrape PDFs and Videos from all Wall Street sources"""
         all_resources = []
-        
         for source_name, url in TARGET_SOURCES.items():
             logger.info(f"🕵️ Scraping {source_name}...")
             try:
@@ -78,129 +62,104 @@ class WallStreetBot:
                 response.raise_for_status()
                 soup = BeautifulSoup(response.text, 'html.parser')
                 
-                found_count = 0
                 for a_tag in soup.find_all('a', href=True):
                     href = a_tag['href']
                     text = a_tag.get_text(strip=True)
-                    
-                    # Resolve relative URLs
                     full_url = urljoin(url, href)
                     
-                    # Ensure it's an external link to a resource, not an internal nav link
-                    if self.is_relevant_resource(text, full_url):
-                        # Avoid duplicates within the same page
-                        if not any(r['link'] == full_url for r in all_resources):
-                            all_resources.append({
-                                "title": text,
-                                "link": full_url,
-                                "source": source_name
-                            })
-                            found_count += 1
-                            
-                logger.info(f"✅ Found {found_count} resources from {source_name}")
-                
+                    # Filter for actual reports/insights
+                    if len(text) > 20 and any(k in text.lower() for k in ['report', 'insight', 'outlook', 'market', 'update', 'release', 'pdf']):
+                        if full_url not in self.posted_links and not any(r['link'] == full_url for r in all_resources):
+                            all_resources.append({"title": text, "link": full_url, "source": source_name})
             except Exception as e:
-                logger.warning(f"⚠️ Failed to scrape {source_name}: {e}")
+                logger.warning(f"⚠️ Blocked/Failed {source_name}: {e}")
+            asyncio.sleep(3) # Polite delay
             
-            # Be polite to servers
-            asyncio.sleep(2) 
-            
-        logger.info(f"📊 Total unique resources found: {len(all_resources)}")
+        logger.info(f"📊 Found {len(all_resources)} new global insights.")
         return all_resources
 
-    async def download_and_upload_pdf(self, pdf_url, title, source):
-        """Download PDF and upload directly to Telegram"""
+    def generate_pdf_report(self, resources):
+        """Create a professional PDF summary of the scraped data"""
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        
+        # Header
+        pdf.set_font("Helvetica", "B", 20)
+        pdf.cell(0, 10, "Global Fund Manager Intelligence Report", ln=True, align="C")
+        pdf.set_font("Helvetica", "", 12)
+        pdf.cell(0, 10, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')}", ln=True, align="C")
+        pdf.ln(10)
+        
+        if not resources:
+            pdf.set_font("Helvetica", "", 12)
+            pdf.cell(0, 10, "No new public insights published in the last 4 hours.", ln=True, align="C")
+        else:
+            # Group by Source
+            grouped = {}
+            for r in resources:
+                grouped.setdefault(r['source'], []).append(r)
+                
+            for source, items in grouped.items():
+                pdf.set_font("Helvetica", "B", 14)
+                pdf.set_fill_color(200, 220, 255)
+                pdf.cell(0, 10, f" {source}", ln=True, fill=True)
+                pdf.ln(2)
+                
+                pdf.set_font("Helvetica", "", 11)
+                for item in items:
+                    # Clean up title
+                    title = item['title'][:100]
+                    pdf.multi_cell(0, 6, f"• {title}")
+                    pdf.set_text_color(0, 0, 255)
+                    pdf.cell(0, 6, f"  Link: {item['link'][:80]}...", ln=True)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.ln(3)
+                pdf.ln(5)
+
+        pdf_path = "Global_Intelligence_Report.pdf"
+        pdf.output(pdf_path)
+        logger.info(f"✅ PDF generated: {pdf_path}")
+        return pdf_path
+
+    async def send_pdf_to_channel(self, pdf_path, resource_count):
         try:
-            response = requests.get(pdf_url, headers=HEADERS, timeout=30)
-            response.raise_for_status()
+            caption = (
+                f"🌍 <b>Global Fund Manager Intelligence Report</b>\n\n"
+                f"📅 <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}\n"
+                f"📊 <b>New Insights Found:</b> {resource_count}\n\n"
+                f"Covering: BlackRock, Vanguard, PIF, Mubadala, GIC, Temasek, Amundi, and more.\n\n"
+                f"📄 <i>Open the attached PDF for the full summary and direct links.</i>"
+            )
             
-            file_size_mb = len(response.content) / (1024 * 1024)
-            if file_size_mb > 50:
-                logger.warning(f"⚠️ PDF too large ({file_size_mb:.2f} MB): {title}")
-                return False
-            
-            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
-                tmp_file.write(response.content)
-                tmp_path = tmp_file.name
-            
-            caption = f"🏦 <b>Source: {source}</b>\n\n📂 <b>{title}</b>"
-            
-            with open(tmp_path, 'rb') as pdf_file:
+            with open(pdf_path, 'rb') as pdf_file:
                 await self.bot.send_document(
                     chat_id=CHANNEL_ID,
                     document=pdf_file,
                     caption=caption,
                     parse_mode='HTML'
                 )
-            
-            os.unlink(tmp_path)
-            return True
-            
+            logger.info("✅ PDF uploaded to Telegram successfully!")
         except Exception as e:
-            logger.error(f"❌ PDF Upload failed for {title}: {e}")
-            return False
-
-    async def send_resource(self, item):
-        """Send resource - upload PDFs directly, send videos/other as links"""
-        title = item['title']
-        link = item['link']
-        source = item['source']
-        
-        if link.lower().endswith('.pdf'):
-            success = await self.download_and_upload_pdf(link, title, source)
-            if not success:
-                return await self.send_as_link(title, link, source)
-            return success
-        else:
-            return await self.send_as_link(title, link, source)
-
-    async def send_as_link(self, title, link, source):
-        """Send resource as a clickable link"""
-        try:
-            message = f"🏦 <b>Source: {source}</b>\n\n"
-            message += f"📂 <b>{title}</b>\n\n"
-            message += f"🔗 <a href='{link}'>Access Resource</a>"
-            
-            await self.bot.send_message(
-                chat_id=CHANNEL_ID,
-                text=message,
-                parse_mode='HTML',
-                disable_web_page_preview=False
-            )
-            return True
-        except Exception as e:
-            logger.error(f"❌ Link post failed: {e}")
-            return False
+            logger.error(f"❌ Failed to upload PDF: {e}")
 
 async def main():
-    logger.info("=" * 50)
-    logger.info("🚀 STARTING WALL STREET MULTI-SOURCE BOT")
-    logger.info("=" * 50)
-    
     if not BOT_TOKEN or not CHANNEL_ID:
-        logger.error("❌ Missing BOT_TOKEN or CHANNEL_ID!")
-        return
+        logger.error("❌ Missing credentials!"); return
     
-    bot = WallStreetBot()
+    bot = GlobalIntelligenceBot()
     resources = bot.scrape_all_sources()
     
-    new_posts_count = 0
-    for item in resources:
-        if item['link'] not in bot.posted_links:
-            success = await bot.send_resource(item)
-            if success:
-                bot.posted_links.append(item['link'])
-                new_posts_count += 1
-                await asyncio.sleep(3) # Prevent rate limiting
-    
-    if new_posts_count > 0:
+    if resources:
+        pdf_path = bot.generate_pdf_report(resources)
+        await bot.send_pdf_to_channel(pdf_path, len(resources))
+        
+        # Mark as posted
+        for r in resources: bot.posted_links.append(r['link'])
         bot.save_posted_links()
-        logger.info(f"✅ Successfully posted {new_posts_count} new Wall Street resources!")
+        os.remove(pdf_path) # Clean up
     else:
-        logger.info("ℹ️ No new resources to post.")
-    
-    logger.info("=" * 50)
-    logger.info("✅ Bot execution completed!")
+        logger.info("ℹ️ No new insights found. Skipping PDF generation.")
 
 if __name__ == '__main__':
     asyncio.run(main())
