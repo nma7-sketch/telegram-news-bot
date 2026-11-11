@@ -14,8 +14,8 @@ from urllib.parse import urljoin, urlparse
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-CHANNEL_ID = os.getenv('CHANNEL_ID')
+BOT_TOKEN = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
+CHANNEL_ID = (os.getenv('CHANNEL_ID') or '').strip()
 
 # Global Fund Managers Database
 TARGET_SOURCES = {
@@ -201,6 +201,7 @@ class GlobalIntelligenceBot:
             logger.info("✅ PDF uploaded to Telegram successfully!")
         except Exception as e:
             logger.error(f"❌ Failed to upload PDF: {e}")
+            raise
 
 async def main():
     if not BOT_TOKEN or not CHANNEL_ID:
