@@ -208,7 +208,8 @@ class GlobalIntelligenceBot:
                     title = sanitize_text(item['title'][:100])
                     pdf.multi_cell(0, 6, f"- {title}")
                     pdf.set_text_color(0, 0, 255)
-                    pdf.cell(0, 6, f"  Link: {sanitize_text(item['link'][:80])}...", new_x="LMARGIN", new_y="NEXT")
+                    link = item['link']
+                    pdf.write(6, f"  Link: {sanitize_text(link)}", link=link)
                     pdf.set_text_color(0, 0, 0)
                     pdf.ln(3)
                 pdf.ln(5)

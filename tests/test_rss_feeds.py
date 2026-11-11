@@ -1,6 +1,8 @@
 import unittest
+import os
+import tempfile
 
-from main import build_target_sources, parse_rss_feed
+from main import GlobalIntelligenceBot, build_target_sources, parse_rss_feed
 
 
 class ParseRssFeedTests(unittest.TestCase):
@@ -63,6 +65,25 @@ class SourceSelectionTests(unittest.TestCase):
             build_target_sources(sources, 500),
             {"Above threshold": "https://example.com/above"},
         )
+
+
+class PdfLinkTests(unittest.TestCase):
+    def test_report_keeps_full_url_and_makes_it_clickable(self):
+        link = "https://example.com/research/" + "market-outlook/" * 8
+        previous_directory = os.getcwd()
+
+        with tempfile.TemporaryDirectory() as temp_directory:
+            try:
+                os.chdir(temp_directory)
+                bot = object.__new__(GlobalIntelligenceBot)
+                bot.generate_pdf_report([{"title": "Market outlook", "link": link, "source": "Example"}])
+                with open("Global_Intelligence_Report.pdf", "rb") as pdf_file:
+                    pdf_content = pdf_file.read()
+            finally:
+                os.chdir(previous_directory)
+
+        self.assertIn(link.encode("ascii"), pdf_content)
+        self.assertIn(b"/URI", pdf_content)
 
 
 if __name__ == "__main__":
