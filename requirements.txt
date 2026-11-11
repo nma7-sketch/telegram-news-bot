@@ -1,5 +1,6 @@
 python-telegram-bot>=20.0
 requests
 beautifulsoup4
+feedparser
 lxml
 fpdf2

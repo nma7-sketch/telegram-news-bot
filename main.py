@@ -2,13 +2,14 @@ import os
 import json
 import logging
 import requests
+import feedparser
 from bs4 import BeautifulSoup
 from telegram import Bot
 from telegram.error import TelegramError
 import asyncio
 from fpdf import FPDF
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -33,6 +34,11 @@ TARGET_SOURCES = {
     "Legal & General (UK)": "https://www.lgim.com/insights"
 }
 
+TARGET_RSS_FEEDS = {
+    "Bridgewater (USA)": "https://www.bridgewater.com/research-and-insights.rss",
+    "GIC (Singapore)": "https://www.gic.com.sg/feed/",
+}
+
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
 def sanitize_text(text):
@@ -51,6 +57,19 @@ def sanitize_text(text):
     # Fallback: strip any remaining non-ASCII characters
     return text.encode('ascii', 'ignore').decode('ascii')
 
+def parse_rss_feed(feed_content, source_name):
+    feed = feedparser.parse(feed_content)
+    if feed.bozo and not feed.entries:
+        raise ValueError(f"Unable to parse RSS feed for {source_name}")
+
+    resources = []
+    for entry in feed.entries:
+        title = BeautifulSoup(entry.get('title', ''), 'html.parser').get_text(" ", strip=True)
+        link = entry.get('link', '').strip()
+        if title and urlparse(link).scheme in ('http', 'https'):
+            resources.append({"title": title, "link": link, "source": source_name})
+    return resources
+
 class GlobalIntelligenceBot:
     def __init__(self):
         self.bot = Bot(token=BOT_TOKEN)
@@ -68,26 +87,49 @@ class GlobalIntelligenceBot:
         with open(self.posted_links_file, 'w') as f: 
             json.dump(self.posted_links, f, indent=2)
 
+    def scrape_source(self, source_name, url):
+        response = requests.get(url, headers=HEADERS, timeout=15)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.text, 'html.parser')
+        resources = []
+
+        for a_tag in soup.find_all('a', href=True):
+            href = a_tag['href']
+            text = a_tag.get_text(strip=True)
+            full_url = urljoin(response.url, href)
+
+            if len(text) > 20 and any(k in text.lower() for k in ['report', 'insight', 'outlook', 'market', 'update', 'release', 'pdf']):
+                resources.append({"title": text, "link": full_url, "source": source_name})
+        return resources
+
     async def scrape_all_sources(self):
         all_resources = []
-        for source_name, url in TARGET_SOURCES.items():
-            logger.info(f"🕵️ Scraping {source_name}...")
+        for source_name, page_url in TARGET_SOURCES.items():
+            feed_url = TARGET_RSS_FEEDS.get(source_name)
             try:
-                response = requests.get(url, headers=HEADERS, timeout=15)
-                response.raise_for_status()
-                soup = BeautifulSoup(response.text, 'html.parser')
-                
-                for a_tag in soup.find_all('a', href=True):
-                    href = a_tag['href']
-                    text = a_tag.get_text(strip=True)
-                    full_url = urljoin(url, href)
-                    
-                    # Filter for actual reports/insights
-                    if len(text) > 20 and any(k in text.lower() for k in ['report', 'insight', 'outlook', 'market', 'update', 'release', 'pdf']):
-                        if full_url not in self.posted_links and not any(r['link'] == full_url for r in all_resources):
-                            all_resources.append({"title": text, "link": full_url, "source": source_name})
+                if feed_url:
+                    logger.info(f"📰 Reading official RSS feed for {source_name}...")
+                    response = requests.get(feed_url, headers=HEADERS, timeout=15)
+                    response.raise_for_status()
+                    resources = parse_rss_feed(response.content, source_name)
+                else:
+                    logger.info(f"🕵️ Scraping {source_name}...")
+                    resources = self.scrape_source(source_name, page_url)
             except Exception as e:
-                logger.warning(f"⚠️ Blocked/Failed {source_name}: {e}")
+                if feed_url:
+                    logger.warning(f"⚠️ RSS feed failed for {source_name}; falling back to its official page: {e}")
+                    try:
+                        resources = self.scrape_source(source_name, page_url)
+                    except Exception as fallback_error:
+                        logger.warning(f"⚠️ Blocked/Failed {source_name}: {fallback_error}")
+                        resources = []
+                else:
+                    logger.warning(f"⚠️ Blocked/Failed {source_name}: {e}")
+                    resources = []
+
+            for resource in resources:
+                if resource['link'] not in self.posted_links and not any(r['link'] == resource['link'] for r in all_resources):
+                    all_resources.append(resource)
             
             # Polite delay (properly awaited now)
             await asyncio.sleep(2) 
