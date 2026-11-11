@@ -17,26 +17,63 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
 CHANNEL_ID = (os.getenv('CHANNEL_ID') or '').strip()
 
-# Global Fund Managers Database
-TARGET_SOURCES = {
-    "BlackRock (USA)": "https://www.blackrock.com/us/individual/insights",
-    "Vanguard (USA)": "https://investor.vanguard.com/investor-resources-education/market-commentary",
-    "Bridgewater (USA)": "https://www.bridgewater.com/research-and-insights",
-    "AQR Capital (USA)": "https://www.aqr.com/Insights",
-    "PIF (Saudi Arabia)": "https://www.pif.gov.sa/en/media-center/",
-    "Mubadala (UAE)": "https://www.mubadala.com/en/media",
-    "ADIA (UAE)": "https://www.adia.ae/en/media.aspx",
-    "GIC (Singapore)": "https://www.gic.com.sg/",
-    "Temasek (Singapore)": "https://www.temasek.com.sg/en/news-and-insights",
-    "Nomura (Japan)": "https://www.nomura.com/",
-    "Amundi (France)": "https://www.amundi.com/insights",
-    "Allianz GI (Germany)": "https://www.allianzgi.com/insights",
-    "Legal & General (UK)": "https://www.lgim.com/insights"
-}
+# Approximate latest reported AUM / fund assets in USD billions. Reporting dates vary.
+AUM_THRESHOLD_USD_BN = 500
+FUND_MANAGER_SOURCES = [
+    ("BlackRock (USA)", 11500, "https://www.blackrock.com/us/individual/insights"),
+    ("Vanguard (USA)", 10100, "https://investor.vanguard.com/investor-resources-education/education/market-summary"),
+    ("Fidelity Investments (USA)", 5500, "https://www.fidelity.com/learning-center/insights"),
+    ("State Street Global Advisors (USA)", 4700, "https://www.ssga.com/us/en/intermediary/insights"),
+    ("JPMorgan Asset Management (USA)", 4000, "https://am.jpmorgan.com/us/en/asset-management/adv/insights/"),
+    ("Goldman Sachs Asset Management (USA)", 3100, "https://www.gsam.com/content/gsam/us/en/market-insights.html"),
+    ("Capital Group (USA)", 2800, "https://www.capitalgroup.com/individual/insights.html"),
+    ("UBS Asset Management (Switzerland)", 2800, "https://www.ubs.com/global/en/assetmanagement/insights.html"),
+    ("PIMCO (USA)", 2000, "https://www.pimco.com/us/en/insights"),
+    ("Allianz Global Investors (Germany)", 600, "https://www.allianzgi.com/en/insights"),
+    ("Amundi (France)", 2300, "https://www.amundi.com/insights"),
+    ("BNY Investments (USA)", 2000, "https://www.bny.com/investments/us/en/individual/insights.html"),
+    ("Invesco (USA)", 1800, "https://www.invesco.com/us/en/insights.html"),
+    ("Franklin Templeton (USA)", 1600, "https://www.franklintempleton.com/insights"),
+    ("Northern Trust Asset Management (USA)", 1600, "https://www.northerntrust.com/united-states/insights-research"),
+    ("T. Rowe Price (USA)", 1600, "https://www.troweprice.com/en/investment-institute/insights"),
+    ("Morgan Stanley Investment Management (USA)", 1500, "https://www.morganstanley.com/insights"),
+    ("PGIM (USA)", 1500, "https://www.pgim.com/insights"),
+    ("Geode Capital Management (USA)", 1500, "https://www.geodecapital.com/"),
+    ("Legal & General Investment Management (UK)", 1400, "https://www.lgim.com/insights"),
+    ("BNP Paribas Asset Management (France)", 1400, "https://www.bnpparibas-am.com/en/how-we-think/"),
+    ("Blackstone (USA)", 1200, "https://www.blackstone.com/insights/"),
+    ("Brookfield Asset Management (Canada)", 1100, "https://www.brookfield.com/views-news/insights"),
+    ("Schroders (UK)", 900, "https://www.schroders.com/en/global/individual/insights/"),
+    ("Natixis Investment Managers (France)", 1200, "https://www.im.natixis.com/en-intl/insights"),
+    ("Wellington Management (USA)", 1200, "https://www.wellington.com/en/insights/markets-and-outlooks"),
+    ("Fidelity International (UK)", 900, "https://www.fidelityinternational.com/editorial/"),
+    ("Dimensional Fund Advisors (USA)", 875, "https://www.dimensional.com/us-en/insights"),
+    ("Nuveen (USA)", 1300, "https://www.nuveen.com/en-us/insights"),
+    ("BMO Global Asset Management (Canada)", 700, "https://www.bmogam.com/ca-en/advisors/insights/"),
+    ("Manulife Investment Management (Canada)", 1000, "https://www.manulifeim.com/institutional/ca/en/insights"),
+    ("DWS (Germany)", 1000, "https://www.dws.com/insights/"),
+    ("PIF (Saudi Arabia)", 1150, "https://www.pif.gov.sa/en/media-center/"),
+    ("ADIA (UAE)", 1100, "https://www.adia.ae/en/publications"),
+    ("GIC (Singapore)", 900, "https://www.gic.com.sg/newsroom/"),
+    ("Norges Bank Investment Management (Norway)", 2000, "https://www.nbim.no/en/news-and-insights/"),
+    ("China Investment Corporation (China)", 1300, "https://www.china-inv.cn/en/"),
+    ("Kuwait Investment Authority (Kuwait)", 1000, "https://www.kia.gov.kw/"),
+    ("Qatar Investment Authority (Qatar)", 510, "https://www.qia.qa/en/NewsRoom/Pages/default.aspx"),
+]
+
+
+def build_target_sources(sources, minimum_aum_usd_bn):
+    return {
+        name: url
+        for name, aum_usd_bn, url in sources
+        if aum_usd_bn > minimum_aum_usd_bn
+    }
+
+
+TARGET_SOURCES = build_target_sources(FUND_MANAGER_SOURCES, AUM_THRESHOLD_USD_BN)
 
 TARGET_RSS_FEEDS = {
-    "Bridgewater (USA)": "https://www.bridgewater.com/research-and-insights.rss",
-    "GIC (Singapore)": "https://www.gic.com.sg/feed/",
+    "Kuwait Investment Authority (Kuwait)": "https://www.kia.gov.kw/feed/",
 }
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
@@ -66,7 +103,7 @@ def parse_rss_feed(feed_content, source_name):
     for entry in feed.entries:
         title = BeautifulSoup(entry.get('title', ''), 'html.parser').get_text(" ", strip=True)
         link = entry.get('link', '').strip()
-        if title and urlparse(link).scheme in ('http', 'https'):
+        if title and sanitize_text(title).strip() and urlparse(link).scheme in ('http', 'https'):
             resources.append({"title": title, "link": link, "source": source_name})
     return resources
 
