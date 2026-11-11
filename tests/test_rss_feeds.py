@@ -2,7 +2,7 @@ import unittest
 import os
 import tempfile
 
-from main import GlobalIntelligenceBot, build_target_sources, parse_rss_feed
+from main import GlobalIntelligenceBot, build_target_sources, normalize_channel_id, parse_rss_feed
 
 
 class ParseRssFeedTests(unittest.TestCase):
@@ -65,6 +65,14 @@ class SourceSelectionTests(unittest.TestCase):
             build_target_sources(sources, 500),
             {"Above threshold": "https://example.com/above"},
         )
+
+
+class ChannelIdTests(unittest.TestCase):
+    def test_converts_private_numeric_channel_ids_to_integers(self):
+        self.assertEqual(normalize_channel_id(" -1001234567890\n"), -1001234567890)
+
+    def test_keeps_public_channel_usernames_as_strings(self):
+        self.assertEqual(normalize_channel_id("@news_channel"), "@news_channel")
 
 
 class PdfLinkTests(unittest.TestCase):

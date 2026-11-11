@@ -15,7 +15,16 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = (os.getenv('TELEGRAM_BOT_TOKEN') or '').strip()
-CHANNEL_ID = (os.getenv('CHANNEL_ID') or '').strip()
+
+
+def normalize_channel_id(channel_id):
+    channel_id = (channel_id or '').strip()
+    if channel_id.isdecimal() or (channel_id.startswith('-') and channel_id[1:].isdecimal()):
+        return int(channel_id)
+    return channel_id
+
+
+CHANNEL_ID = normalize_channel_id(os.getenv('CHANNEL_ID'))
 
 # Approximate latest reported AUM / fund assets in USD billions. Reporting dates vary.
 AUM_THRESHOLD_USD_BN = 500
