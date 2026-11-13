@@ -14,114 +14,100 @@ logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHANNEL_ID = os.getenv('CHANNEL_ID')
+TAMIL_FONT_PATH = os.getenv(
+    'TAMIL_FONT_PATH',
+    '/usr/share/fonts/truetype/noto/NotoSansTamil-Regular.ttf',
+)
 
+# Curated educational examples, not an exhaustive catalogue of plants.
 PLANT_REACTIONS = [
     {
-        'plant': 'Neem',
-        'compound': 'Azadirachtin',
-        'reaction': 'Hydrolysis / Oxidation',
-        'conditions': 'Aqueous buffer, pH 7.2, 30–40°C',
-        'equation': 'Azadirachtin + H2O -> hydrolyzed terpenoid products + oxidized by-products',
-        'summary_en': 'Neem is rich in limonoids and phenolic compounds. In a simplified educational model, the active molecules can undergo hydrolysis and oxidative transformation under warm, buffered aqueous conditions.',
-        'summary_ta': 'வேப்ப மரம் லிமோனாய்டுகள் மற்றும் பீனாலிக் சேர்மங்களை கொண்டுள்ளது. எளிமையான கல்விப் மாதிரியில், சூடான நீர்-அடிப்படையிலான நிலைமைகளில் செயலில் உள்ள மூலக்கூறுகள் ஹைட்ரோலிசிஸ் மற்றும் ஆக்சிஃபைலேஷனில் ஈடுபடலாம்.',
-        'diagram': 'Plant matrix -> [aqueous buffer, 30-40°C] -> hydrolyzed fragments -> oxidized products',
-        'safety': 'This is a conceptual chemistry model for education only. It is not a treatment guide or a skin-use instruction.'
+        'plant': 'Neem', 'compound': 'Azadirachtin',
+        'reaction': 'Hydrolysis / oxidation (conceptual model)',
+        'conditions': 'Illustrative aqueous, oxygen-exposed model; not a lab protocol',
+        'equation': 'Azadirachtin + H2O -> hydrolysis products (simplified, not balanced)',
+        'summary_en': 'Neem contains limonoids and phenolic compounds. This simplified model illustrates possible hydrolytic and oxidative transformations; actual products depend on the specific molecule and conditions.',
+        'summary_ta': 'வேப்பிலையில் லிமோனாய்டுகள் மற்றும் பீனாலிக் சேர்மங்கள் உள்ளன. இந்த எளிய மாதிரி ஹைட்ரோலிசிஸ் மற்றும் ஆக்சிஜனேற்ற மாற்றங்களை விளக்குகிறது; உண்மையான தயாரிப்புகள் மூலக்கூறு மற்றும் சூழ்நிலைகளைப் பொறுத்தது.',
+        'diagram': 'Plant compounds -- conceptual transformation --> possible product families',
     },
     {
-        'plant': 'Tulsi',
-        'compound': 'Eugenol',
-        'reaction': 'Oxidation / Esterification',
-        'conditions': 'Air exposure, mild heat, neutral solvent',
-        'equation': 'Eugenol + O2 -> oxidized phenolic products + resinous intermediates',
-        'summary_en': 'Tulsi contains eugenol and related phenolics. In a classroom model, oxygen and mild heat can promote oxidation to more stable aromatic products.',
-        'summary_ta': 'துளசி ஈஜெனோல் மற்றும் தொடர்புடைய பீனாலிக் சேர்மங்களைக் கொண்டுள்ளது. வகுப்பறை மாதிரியில், ஆக்ஸிஜன் மற்றும் லேசான வெப்பம் ஆகியவை அதிக ஸ்திரத்தன்மை கொண்ட அரோமாட்டிக் பொருட்களாக ஆக்சிஜனேற்றத்தை தூண்டலாம்.',
-        'diagram': 'Eugenol + O2 -> phenolic oxidation products -> resinous compounds',
-        'safety': 'This is an educational reaction model only and must not be interpreted as a human-application procedure.'
+        'plant': 'Tulsi', 'compound': 'Eugenol and related phenolics',
+        'reaction': 'Oxidation (conceptual model)',
+        'conditions': 'Illustrative oxygen-exposed model; not a lab protocol',
+        'equation': 'Phenolic compound + O2 -> possible oxidation products (simplified)',
+        'summary_en': 'Tulsi contains eugenol and other phenolics. Oxidation is a broad reaction class; this scheme is illustrative and does not specify experimentally verified products.',
+        'summary_ta': 'துளசியில் ஈஜெனோல் உள்ளிட்ட பீனாலிக் சேர்மங்கள் உள்ளன. ஆக்சிஜனேற்றம் என்பது பரந்த வினை வகை; இங்கு காட்டப்படும் திட்டம் விளக்கத்திற்கானது, பரிசோதனையால் உறுதிப்படுத்தப்பட்ட தயாரிப்புகளைச் சுட்டிக்காட்டாது.',
+        'diagram': 'Phenolic compound + O2 -- conceptual oxidation --> product family',
     },
     {
-        'plant': 'Aloe Vera',
-        'compound': 'Aloin / anthraquinone glycosides',
-        'reaction': 'Hydrolysis',
-        'conditions': 'Water, pH 5-7, mild warming',
-        'equation': 'Aloin glycoside + H2O -> aglycone + sugar fragments',
-        'summary_en': 'Aloe contains anthraquinone glycosides that can hydrolyze in aqueous conditions, producing smaller aromatic fragments under mild, non-extreme conditions.',
-        'summary_ta': 'அலோவேராவில் ஆந்த்ராகுவினோன் கிளைகோசைடுகள் உள்ளன. நீரில் இது ஹைட்ரோலிசிஸ் அடைந்து, லேசான வெப்ப நிலைகளில் சிறிய அரோமாட்டிக் பகுப்புகளாக மாறலாம்.',
-        'diagram': 'Glycoside -> [H2O, mild heat] -> aglycone + sugar fragments',
-        'safety': 'This is a chemistry concept model, not a preparation or skin-use protocol.'
+        'plant': 'Aloe Vera', 'compound': 'Aloin / anthraquinone glycosides',
+        'reaction': 'Glycoside hydrolysis (conceptual model)',
+        'conditions': 'Illustrative aqueous model; not a lab protocol',
+        'equation': 'Glycoside + H2O -> aglycone + sugar (generalized)',
+        'summary_en': 'Aloin is an anthraquinone glycoside. The generalized scheme shows how glycoside hydrolysis is represented in chemistry; it is not a procedure or a claim about a particular preparation.',
+        'summary_ta': 'அலோயின் ஒரு ஆந்த்ராகுவினோன் கிளைகோசைடு. கிளைகோசைடு ஹைட்ரோலிசிஸை வேதியியலில் எவ்வாறு பொதுவாகக் காட்டுகிறோம் என்பதை இந்தத் திட்டம் விளக்குகிறது; இது தயாரிப்பு முறை அல்ல.',
+        'diagram': 'Glycoside + H2O -- conceptual hydrolysis --> aglycone + sugar',
     },
     {
-        'plant': 'Turmeric',
-        'compound': 'Curcumin',
-        'reaction': 'Photochemical oxidation',
-        'conditions': 'Light exposure, oxygen, neutral solvent',
-        'equation': 'Curcumin + O2 + light -> oxidized diketone products + degraded fragments',
-        'summary_en': 'Curcumin is a diarylheptanoid whose conjugated system is highly sensitive to light and oxygen. In a simplified model, oxidative degradation can lead to smaller fragments.',
-        'summary_ta': 'மஞ்சள் நிறத்தில் உள்ள கர்குமின் ஒரு டைஆரில்ஹெப்டனாய்டு. அதன் கன்ஜுகேடட் அமைப்பு ஒளி மற்றும் ஆக்ஸிஜனை எதிர்கொள்ளும்போது ஆக்சிடேடிவ் சிதைவை சந்திக்கலாம்.',
-        'diagram': 'Curcumin + light + O2 -> oxidized diketone fragments',
-        'safety': 'The content is educational only and is not a recommendation for direct human use.'
+        'plant': 'Turmeric', 'compound': 'Curcumin',
+        'reaction': 'Oxidative degradation (conceptual model)',
+        'conditions': 'Illustrative light/oxygen model; not a lab protocol',
+        'equation': 'Curcumin + oxidant -> possible degradation products (simplified)',
+        'summary_en': 'Curcumin is a conjugated natural product. Light and oxygen can affect its stability; this diagram is a high-level conceptual illustration, not a fully specified reaction.',
+        'summary_ta': 'கர்குமின் இணைந்த பிணைப்புகள் கொண்ட இயற்கைச் சேர்மமாகும். ஒளியும் ஆக்சிஜனும் அதன் நிலைத்தன்மையைப் பாதிக்கலாம்; இந்த வரைபடம் முழுமையாக வரையறுக்கப்பட்ட வினை அல்ல, கருத்து விளக்கம் மட்டுமே.',
+        'diagram': 'Curcumin -- light / oxygen (conceptual) --> possible product families',
     },
     {
-        'plant': 'Ginger',
-        'compound': 'Gingerol',
-        'reaction': 'Thermal degradation / oxidation',
-        'conditions': 'Heat above 60°C and oxygen exposure',
-        'equation': 'Gingerol + O2 + heat -> shogaol + oxidized aldehyde products',
-        'summary_en': 'Gingerols are pungent phenolic compounds. Heating in the presence of oxygen can convert them to shogaols and related oxidized products in a simplified reaction model.',
-        'summary_ta': 'இஞ்சியில் ஜிங்கரோல்கள் உள்ளன. ஆக்ஸிஜன் மற்றும் வெப்பத்துடன் சேரும்போது, அவை ஷோகால்ஸ் மற்றும் தொடர்புடைய ஆக்சிஜனேற்றப் பொருட்களாக மாற்றமடையலாம்.',
-        'diagram': 'Gingerol -> [heat + O2] -> shogaol + aldehyde fragments',
-        'safety': 'This is an educational simulation of chemistry, not a skin treatment method.'
+        'plant': 'Ginger', 'compound': 'Gingerols',
+        'reaction': 'Thermal transformation (conceptual model)',
+        'conditions': 'Illustrative heat-related model; not a lab protocol',
+        'equation': 'Gingerol -> related compounds (simplified; conditions-dependent)',
+        'summary_en': 'Ginger contains gingerols and related compounds. Heat-related transformations are discussed in food chemistry, but this generic scheme is not a recipe and does not predict a specific yield or product mixture.',
+        'summary_ta': 'இஞ்சியில் ஜிஞ்செரால்கள் மற்றும் தொடர்புடைய சேர்மங்கள் உள்ளன. உணவு வேதியியலில் வெப்பத்தால் ஏற்படும் மாற்றங்கள் விவாதிக்கப்படுகின்றன; இந்தப் பொதுவான திட்டம் செய்முறை அல்ல, குறிப்பிட்ட தயாரிப்பையோ அளவையோ கணிக்காது.',
+        'diagram': 'Gingerol -- conceptual heat-related change --> related compounds',
     },
     {
-        'plant': 'Mint',
-        'compound': 'Menthol',
-        'reaction': 'Oxidation / dehydration',
-        'conditions': 'Air exposure, elevated temperature',
-        'equation': 'Menthol + O2 -> menthone + oxidized terpenoid species',
-        'summary_en': 'Menthol can be oxidized under warm, oxygen-rich conditions to compounds such as menthone and related terpenoid oxidation products in a theoretical framework.',
-        'summary_ta': 'மெந்தோல், வெப்பம் மற்றும் ஆக்ஸிஜன் இருப்பில் மெந்தோன் மற்றும் பிற டெர்பெனாய்டு ஆக்சிஜனேற்றப் பொருட்களாக மாற்றமடையலாம்.',
-        'diagram': 'Menthol + O2 -> menthone + oxidized terpenoid products',
-        'safety': 'Conceptual chemistry education only; not a direct-use recommendation.'
+        'plant': 'Mint', 'compound': 'Menthol',
+        'reaction': 'Oxidation (conceptual model)',
+        'conditions': 'Generalized oxidation model; not a lab protocol',
+        'equation': 'Secondary alcohol + oxidant -> ketone (general reaction class)',
+        'summary_en': 'Menthol is a secondary alcohol. The diagram shows the general alcohol-to-ketone oxidation pattern; it is a textbook reaction class, not an instruction to treat plant material.',
+        'summary_ta': 'மெந்தோல் ஒரு இரண்டாம் நிலை ஆல்கஹால். ஆல்கஹால் கீட்டோனாக மாறும் பொதுவான ஆக்சிஜனேற்ற வடிவத்தை வரைபடம் காட்டுகிறது; இது பாடநூல் கருத்து மட்டுமே.',
+        'diagram': 'Secondary alcohol -- conceptual oxidation --> ketone',
     },
     {
-        'plant': 'Lavender',
-        'compound': 'Linalool',
-        'reaction': 'Oxidation / rearrangement',
-        'conditions': 'Air exposure and moderate heat',
-        'equation': 'Linalool + O2 -> linalyl oxide + oxidized monoterpene products',
-        'summary_en': 'Lavender contains linalool, a monoterpene alcohol that can convert to oxide and oxidized products under oxygen-rich and warm conditions in educational models.',
-        'summary_ta': 'லாவெண்டர் லினலோல் என்ற மானோடெர்பீன் ஆல்கஹாலை கொண்டுள்ளது. ஆக்ஸிஜன் மற்றும் லேசான வெப்பம் இருப்பில் இது லினாலில் ஆக்சைடு போன்ற தயாரிப்புகளாக மாறலாம்.',
-        'diagram': 'Linalool -> [O2 + warmth] -> linalyl oxide + oxidation products',
-        'safety': 'This is informational and not a treatment or application protocol.'
+        'plant': 'Lavender', 'compound': 'Linalool',
+        'reaction': 'Oxidation (conceptual model)',
+        'conditions': 'Generalized oxygen-exposure model; not a lab protocol',
+        'equation': 'Terpene alcohol + O2 -> possible oxidation products (simplified)',
+        'summary_en': 'Linalool is a terpene alcohol found in lavender. Its possible transformations depend on conditions; the scheme is deliberately generalized and does not prescribe an experiment.',
+        'summary_ta': 'லாவெண்டரில் லினலூல் என்ற டெர்பீன் ஆல்கஹால் காணப்படுகிறது. அதன் மாற்றங்கள் சூழ்நிலைகளைப் பொறுத்தவை; இந்தத் திட்டம் பொதுவானது, பரிசோதனை வழிமுறையை வழங்காது.',
+        'diagram': 'Terpene alcohol + O2 -- conceptual oxidation --> product family',
     },
     {
-        'plant': 'Rosemary',
-        'compound': 'Carnosic acid',
-        'reaction': 'Oxidation / decarboxylation',
-        'conditions': 'Oxygen, light, neutral solvent',
-        'equation': 'Carnosic acid + O2 + light -> oxidized abietane products + decarboxylated fragments',
-        'summary_en': 'Rosemary is rich in phenolic diterpenes. Under oxygen and light, carnosic acid can undergo oxidation and fragmentation in a simplified reaction model.',
-        'summary_ta': 'ரோஸ்மேரி ஃபீனாலிக் டைட்டர்பீன்களை கொண்டுள்ளது. ஆக்ஸிஜன் மற்றும் ஒளி இருப்பில் கர்னோசிக் அமிலம் ஆக்சிஜனேற்றம் மற்றும் பகுப்புக்கு உட்படலாம்.',
-        'diagram': 'Carnosic acid + O2 + light -> oxidized abietane products',
-        'safety': 'Educational chemistry only; no direct-use claims are implied.'
+        'plant': 'Rosemary', 'compound': 'Carnosic acid',
+        'reaction': 'Oxidation (conceptual model)',
+        'conditions': 'Illustrative light/oxygen model; not a lab protocol',
+        'equation': 'Carnosic acid + oxidant -> possible oxidation products (simplified)',
+        'summary_en': 'Rosemary contains phenolic diterpenes, including carnosic acid. This high-level model illustrates oxidation as a possible transformation without asserting a single product or experimental condition.',
+        'summary_ta': 'ரோஸ்மேரியில் கர்னோசிக் அமிலம் உள்ளிட்ட பீனாலிக் டைட்டர்பீன்கள் உள்ளன. ஒரே தயாரிப்பையோ பரிசோதனைச் சூழ்நிலையையோ உறுதிப்படுத்தாமல், ஆக்சிஜனேற்றத்தை சாத்தியமான மாற்றமாக இந்த மாதிரி விளக்குகிறது.',
+        'diagram': 'Carnosic acid -- conceptual oxidation --> possible product family',
     },
     {
-        'plant': 'Eucalyptus',
-        'compound': 'Eucalyptol',
-        'reaction': 'Oxidation',
-        'conditions': 'Oxygen, heat, acidic or neutral medium',
-        'equation': 'Eucalyptol + O2 -> oxygenated terpenoid products + minor fragments',
-        'summary_en': 'Eucalyptus contains eucalyptol, a cyclic ether with a terpene skeleton. Under heat and oxidation in an educational model, oxygenated products can form through auto-oxidation.',
-        'summary_ta': 'யூகலிப்டஸ் ஆலையில் யூகலிப்டோல் உள்ளது. வெப்பம் மற்றும் ஆக்ஸிஜன் இருப்பில் இது ஓவ்ஸிஜனேற்றத்தினால் ஆக்ஸிஜன் சேர்மங்களாக மாற்றமடையலாம்.',
-        'diagram': 'Eucalyptol + O2 -> oxygenated terpenoid products',
-        'safety': 'This content is conceptual and is not an application instruction.'
+        'plant': 'Eucalyptus', 'compound': 'Eucalyptol',
+        'reaction': 'Oxidation (conceptual model)',
+        'conditions': 'Generalized oxygen-exposure model; not a lab protocol',
+        'equation': 'Eucalyptol + oxidant -> possible oxygenated products (simplified)',
+        'summary_en': 'Eucalyptol is a cyclic ether found in eucalyptus. The model introduces oxidation as a broad concept; specific transformations require verified chemical data and controlled research.',
+        'summary_ta': 'யூகலிப்டஸில் யூகலிப்டால் என்ற வளைய ஈதர் காணப்படுகிறது. ஆக்சிஜனேற்றத்தைப் பொதுக் கருத்தாக இந்த மாதிரி அறிமுகப்படுத்துகிறது; குறிப்பிட்ட மாற்றங்களுக்கு உறுதிப்படுத்தப்பட்ட வேதியியல் தரவும் கட்டுப்படுத்தப்பட்ட ஆய்வும் தேவை.',
+        'diagram': 'Eucalyptol -- conceptual oxidation --> possible product family',
     },
 ]
 
 
 def get_hourly_plant():
-    utc_now = datetime.now(timezone.utc)
-    index = utc_now.hour % len(PLANT_REACTIONS)
-    return PLANT_REACTIONS[index]
+    # UTC hour selects one entry; this is a curated rotation, not all plant species.
+    return PLANT_REACTIONS[datetime.now(timezone.utc).hour % len(PLANT_REACTIONS)]
 
 
 class ChemistryReportPDF(FPDF):
@@ -137,52 +123,62 @@ class ChemistryReportPDF(FPDF):
 
 
 def create_pdf_for_plant(plant):
+    if not os.path.isfile(TAMIL_FONT_PATH):
+        raise FileNotFoundError(
+            f'Tamil Unicode font not found at {TAMIL_FONT_PATH}. '
+            'Install fonts-noto-core or set TAMIL_FONT_PATH.'
+        )
+
     pdf = ChemistryReportPDF()
+    pdf.add_font('NotoTamil', style='', fname=TAMIL_FONT_PATH)
+    # HarfBuzz shapes Tamil glyphs correctly when uharfbuzz is installed.
+    pdf.set_text_shaping()
     pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_auto_page_break(auto=True, margin=18)
 
     pdf.set_font('helvetica', 'B', 20)
-    pdf.cell(0, 12, f'{plant["plant"]} Chemistry Model', ln=True, align='C')
+    pdf.cell(0, 12, f'{plant["plant"]} Chemistry Model', new_x='LMARGIN', new_y='NEXT', align='C')
     pdf.set_font('helvetica', '', 11)
-    pdf.multi_cell(0, 7, f"Compound: {plant['compound']}\nReaction class: {plant['reaction']}\nConditions: {plant['conditions']}")
+    pdf.multi_cell(0, 7, f"Compound: {plant['compound']}\nReaction class: {plant['reaction']}\nModel scope: {plant['conditions']}")
     pdf.ln(3)
 
     pdf.set_font('helvetica', 'B', 14)
-    pdf.cell(0, 8, 'English Summary', ln=True)
+    pdf.cell(0, 8, 'English Summary', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('helvetica', '', 11)
     pdf.multi_cell(0, 6, plant['summary_en'])
     pdf.ln(2)
 
-    pdf.set_font('helvetica', 'B', 14)
-    pdf.cell(0, 8, 'தமிழ் விளக்கம்', ln=True)
-    pdf.set_font('helvetica', '', 11)
-    pdf.multi_cell(0, 6, plant['summary_ta'])
+    pdf.set_font('NotoTamil', '', 13)
+    pdf.cell(0, 8, 'தமிழ் விளக்கம்', new_x='LMARGIN', new_y='NEXT')
+    pdf.multi_cell(0, 7, plant['summary_ta'])
     pdf.ln(2)
 
     pdf.set_font('helvetica', 'B', 14)
-    pdf.cell(0, 8, 'Conceptual Reaction Scheme', ln=True)
-    pdf.set_font('helvetica', 'B', 12)
-    pdf.multi_cell(0, 8, plant['equation'])
+    pdf.cell(0, 8, 'Conceptual Reaction Scheme', new_x='LMARGIN', new_y='NEXT')
     pdf.set_font('helvetica', '', 11)
-    pdf.multi_cell(0, 6, 'Diagram (conceptual):')
+    pdf.multi_cell(0, 7, plant['equation'])
+    pdf.ln(1)
+    pdf.set_font('helvetica', 'B', 11)
+    pdf.cell(0, 7, 'Diagram (conceptual)', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('helvetica', '', 10)
+    pdf.multi_cell(0, 6, '[ Reactants / plant compound ]  --->  [ possible product family ]')
     pdf.multi_cell(0, 6, plant['diagram'])
-    pdf.ln(2)
+    pdf.ln(3)
 
-    pdf.set_font('helvetica', 'B', 14)
-    pdf.cell(0, 8, 'Safety and Scope', ln=True)
-    pdf.set_font('helvetica', '', 11)
-    pdf.multi_cell(0, 6, plant['safety'])
-    pdf.ln(4)
+    pdf.set_font('helvetica', 'B', 13)
+    pdf.cell(0, 8, 'Safety and Scope', new_x='LMARGIN', new_y='NEXT')
+    pdf.set_font('helvetica', '', 10)
+    pdf.multi_cell(0, 6, 'Educational conceptual model only. It is not a validated reaction protocol, extraction method, medical advice, or instruction to apply any substance to people. Reaction products and conditions must be checked against reliable scientific sources.')
 
     output_name = f"{plant['plant'].lower().replace(' ', '_')}_plant_chemistry_report.pdf"
     pdf.output(output_name)
-    logger.info('✅ Generated PDF: %s', output_name)
+    logger.info('Generated PDF: %s', output_name)
     return output_name
 
 
 async def send_pdf_to_channel(pdf_path):
     if not BOT_TOKEN or not CHANNEL_ID:
-        logger.info('ℹ️ Telegram credentials not set. Skipping send. Local PDF ready: %s', pdf_path)
+        logger.info('Telegram credentials are not set; PDF generated locally: %s', pdf_path)
         return False
 
     try:
@@ -191,23 +187,19 @@ async def send_pdf_to_channel(pdf_path):
             await bot.send_document(
                 chat_id=CHANNEL_ID,
                 document=pdf_file,
-                caption=(
-                    '🌿 Plant Chemistry Reaction Bulletin\n\n'
-                    'This is an educational chemistry model only.\n'
-                    'No direct treatment or application guidance is implied.'
-                ),
-                parse_mode='HTML',
+                caption='Plant chemistry educational model only. Not medical advice or a human-application guide.',
             )
-        logger.info('✅ PDF uploaded to Telegram successfully.')
+        logger.info('PDF uploaded to Telegram successfully.')
         return True
-    except Exception as exc:  # pragma: no cover - runtime Telegram failure
-        logger.error('❌ Failed to upload PDF: %s', exc)
-        return False
+    except Exception:
+        logger.exception('Failed to upload PDF to Telegram')
+        raise
 
 
 async def main():
     plant = get_hourly_plant()
     pdf_path = create_pdf_for_plant(plant)
+    logger.info('Selected plant for this UTC hour: %s', plant['plant'])
     await send_pdf_to_channel(pdf_path)
 
 
