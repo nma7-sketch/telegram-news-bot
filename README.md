@@ -14,3 +14,10 @@ repositories created in the current year, ordered by stars, and sends a rotating
 repository spotlight to Telegram every two hours (UTC). It uses the built-in
 GitHub Actions token plus the existing Telegram secrets and can also be run
 manually from the Actions tab.
+
+## Reddit Learning
+
+The **Reddit Learning** workflow shares a rotating post from the daily top
+feed in r/todayilearned with Telegram every two hours (UTC). It uses Reddit's
+public RSS feed, so no Reddit credentials are needed; it can also be run
+manually from the Actions tab.
