@@ -303,47 +303,80 @@ def remove_old_history(
     return recent
 
 
-def select_article(
+def select_articles(
     articles: tuple[MarketArticle, ...],
     state: dict[str, str],
-    at: datetime | None = None,
-) -> MarketArticle | None:
-    moment = at or datetime.now(timezone.utc)
-    if moment.tzinfo is None or moment.utcoffset() is None:
-        raise ValueError('The selection time must include a timezone.')
-    moment = moment.astimezone(timezone.utc)
-    slot = int(moment.timestamp() // 1800)
-
-    for offset in range(len(REGION_ORDER)):
-        region = REGION_ORDER[(slot + offset) % len(REGION_ORDER)]
+) -> tuple[MarketArticle, ...]:
+    selected: list[MarketArticle] = []
+    selected_fingerprints: set[str] = set()
+    for region in REGION_ORDER:
         unseen = [
             article
             for article in articles
             if article.country_code == region
             and not any(fingerprint in state for fingerprint in _fingerprints(article))
+            and not any(
+                fingerprint in selected_fingerprints
+                for fingerprint in _fingerprints(article)
+            )
         ]
         if unseen:
-            return max(unseen, key=lambda article: article.published_at)
-    return None
+            article = max(unseen, key=lambda item: item.published_at)
+            selected.append(article)
+            selected_fingerprints.update(_fingerprints(article))
+    return tuple(selected)
 
 
-def format_message(article: MarketArticle, now: datetime | None = None) -> str:
+def format_digest(
+    articles: tuple[MarketArticle, ...],
+    now: datetime | None = None,
+) -> tuple[str, ...]:
+    if not articles:
+        return ()
     moment = now or datetime.now(timezone.utc)
-    age = moment.astimezone(timezone.utc) - article.published_at
-    if age < timedelta(minutes=1):
-        age_text = 'just now'
-    elif age < timedelta(hours=1):
-        age_text = f'{int(age.total_seconds() // 60)} min ago'
-    else:
-        age_text = f'{int(age.total_seconds() // 3600)} hr ago'
-    icon = CATEGORY_ICONS[article.category]
-    return (
-        f'{article.flag} {article.country_name} source · {icon} {article.category.upper()}\n\n'
-        f'{article.title}\n\n'
-        f'{article.source} · {age_text}\n'
-        f'{article.url}\n\n'
-        'Public reporting only · Not investment advice'
+    if moment.tzinfo is None or moment.utcoffset() is None:
+        raise ValueError('The digest time must include a timezone.')
+    moment = moment.astimezone(timezone.utc)
+    header = (
+        f'🌍 Global Market Briefing · {moment.strftime("%Y-%m-%d %H:%M UTC")}\n'
+        'Fresh public headlines from each available region:\n\n'
     )
+    sections = []
+    for article in articles:
+        age = moment - article.published_at
+        if age < timedelta(minutes=1):
+            age_text = 'just now'
+        elif age < timedelta(hours=1):
+            age_text = f'{int(age.total_seconds() // 60)} min ago'
+        else:
+            age_text = f'{int(age.total_seconds() // 3600)} hr ago'
+        icon = CATEGORY_ICONS[article.category]
+        title = article.title
+        if len(title) > 200:
+            title = title[:197].rstrip() + '...'
+        sections.append(
+            f'{article.flag} {article.country_name} source · '
+            f'{icon} {article.category.upper()} · {age_text}\n'
+            f'{title}\n'
+            f'{article.source}\n'
+            f'{article.url}'
+        )
+
+    messages = []
+    current = header
+    for section in sections:
+        addition = f'{section}\n\n'
+        if len(current) + len(addition) > 3900 and current != header:
+            messages.append(current.rstrip())
+            current = f'{header}(continued)\n\n'
+        if len(current) + len(addition) > 3900:
+            raise ValueError('A market-news item exceeds Telegram message limits.')
+        current += addition
+    current += 'Public reporting only · Not investment advice'
+    if len(current) > 4096:
+        raise ValueError('The market-news digest exceeds Telegram message limits.')
+    messages.append(current)
+    return tuple(messages)
 
 
 async def main() -> None:
@@ -355,23 +388,26 @@ async def main() -> None:
     now = datetime.now(timezone.utc)
     state = remove_old_history(load_state(), now)
     articles = fetch_recent_news(now=now)
-    article = select_article(articles, state, now)
-    if article is None:
+    selected = select_articles(articles, state)
+    if not selected:
         logger.info('No fresh, unseen market headlines found; nothing was sent.')
         save_state(state)
         return
 
+    messages = format_digest(selected, now)
     async with Bot(token=bot_token) as bot:
-        await bot.send_message(
-            chat_id=channel_id,
-            text=format_message(article, now),
-            disable_web_page_preview=True,
-        )
+        for message in messages:
+            await bot.send_message(
+                chat_id=channel_id,
+                text=message,
+                disable_web_page_preview=True,
+            )
 
-    for fingerprint in _fingerprints(article):
-        state[fingerprint] = now.isoformat()
+    for article in selected:
+        for fingerprint in _fingerprints(article):
+            state[fingerprint] = now.isoformat()
     save_state(state)
-    logger.info('Sent %s news from %s.', article.category, article.source)
+    logger.info('Sent %d market headlines across %d Telegram message(s).', len(selected), len(messages))
 
 
 if __name__ == '__main__':

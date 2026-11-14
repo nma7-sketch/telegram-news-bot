@@ -17,16 +17,16 @@ manually from the Actions tab.
 
 ## 30-Minute Market News
 
-The **30-Minute Market News** workflow shares recent public news about stocks,
-finance, oil, crypto, and currencies every 30 minutes (UTC). It reads public
-RSS headlines and links from outlets in the US, UK, India, Australia, and
-Japan, Hong Kong, and global finance/crypto publications; the flag identifies
-the outlet's country or global edition, not necessarily the event's location.
-It rejects items older than 24 hours, rotates among regions, and keeps seven
-days of duplicate history in the GitHub Actions cache. It uses the existing
-Telegram secrets and can be run manually from the Actions tab. It only uses
-public reporting, including public disclosures when reported by those sources;
-it does not seek or publish non-public insider information.
+The **30-Minute Market News** workflow sends a single digest every 30 minutes
+(UTC), with one fresh public headline for each available publisher region. It
+covers finance, stocks, oil, crypto, and currencies using RSS feeds from the
+US, UK, India, Australia, Japan, Hong Kong, and global publications. Country
+flags identify the publisher's region, not necessarily the event's location.
+The workflow rejects items older than 24 hours and keeps seven days of
+duplicate history in the GitHub Actions cache. It uses the existing Telegram
+secrets and can be run manually from the Actions tab. It only uses public
+reporting, including public disclosures when reported by those sources; it does
+not seek or publish non-public insider information.
 
 ## Reddit Learning
 

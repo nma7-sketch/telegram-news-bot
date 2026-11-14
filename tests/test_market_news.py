@@ -8,12 +8,12 @@ from market_news import (
     MarketArticle,
     _fingerprints,
     classify_title,
-    format_message,
+    format_digest,
     load_state,
     parse_feed,
     remove_old_history,
     save_state,
-    select_article,
+    select_articles,
 )
 
 
@@ -94,22 +94,41 @@ class MarketNewsTests(unittest.TestCase):
         another_article = self.make_article('Crude oil market outlook changes', url_suffix='2')
         state = {fingerprint: self.now.isoformat() for fingerprint in _fingerprints(article)}
 
-        self.assertIsNone(select_article((repeated_article,), state, self.now))
-        self.assertEqual(select_article((another_article,), state, self.now), another_article)
+        self.assertEqual(select_articles((repeated_article,), state), ())
+        self.assertEqual(select_articles((another_article,), state), (another_article,))
 
-    def test_regions_rotate_when_multiple_articles_are_available(self):
-        uk_article = self.make_article('UK stocks rise', region='GB', url_suffix='uk')
+    def test_selects_freshest_unseen_article_for_each_available_region(self):
+        uk_older = self.make_article('UK stocks fall', region='GB', url_suffix='uk-old')
+        uk_newer = self.make_article(
+            'UK stocks rally',
+            region='GB',
+            published_at=self.now - timedelta(minutes=2),
+            url_suffix='uk-new',
+        )
         india_article = self.make_article('India stocks rally', region='IN', url_suffix='india')
-        us_article = self.make_article('US shares gain', region='US', url_suffix='us')
+        us_article = self.make_article('US stocks gain', region='US', url_suffix='us')
 
-        first = select_article((uk_article, india_article, us_article), {}, self.now)
-        next_half_hour = select_article(
-            (uk_article, india_article, us_article),
+        selected = select_articles(
+            (us_article, uk_older, india_article, uk_newer),
             {},
-            self.now + timedelta(minutes=30),
         )
 
-        self.assertNotEqual(first.country_code, next_half_hour.country_code)
+        self.assertEqual(
+            [(article.country_code, article.title) for article in selected],
+            [
+                ('GB', 'UK stocks rally'),
+                ('IN', 'India stocks rally'),
+                ('US', 'US stocks gain'),
+            ],
+        )
+
+    def test_same_headline_is_included_only_once_in_a_digest(self):
+        uk_article = self.make_article('Global stocks rally', region='GB', url_suffix='uk')
+        us_duplicate = self.make_article('Global stocks rally', region='US', url_suffix='us')
+
+        selected = select_articles((uk_article, us_duplicate), {})
+
+        self.assertEqual(selected, (uk_article,))
 
     def test_history_expires_after_seven_days_and_round_trips(self):
         fresh = self.now - timedelta(days=1)
@@ -124,16 +143,38 @@ class MarketNewsTests(unittest.TestCase):
         pruned = remove_old_history(loaded, self.now)
         self.assertEqual(set(pruned), {'fresh'})
 
-    def test_message_includes_source_region_category_age_and_link(self):
-        article = self.make_article('Bitcoin rallies across global markets', region='IN')
+    def test_digest_includes_all_selected_regions_in_one_message(self):
+        india_article = self.make_article('Bitcoin rallies across markets', region='IN')
+        us_article = self.make_article('US stocks gain today', region='US', url_suffix='us')
 
-        message = format_message(article, self.now)
+        messages = format_digest((india_article, us_article), self.now)
 
-        self.assertIn('🇮🇳 India source', message)
-        self.assertIn('CRYPTO', message)
-        self.assertIn('10 min ago', message)
-        self.assertIn(article.url, message)
-        self.assertIn('Public reporting only', message)
+        self.assertEqual(len(messages), 1)
+        self.assertIn('🇮🇳 India source', messages[0])
+        self.assertIn('🇺🇸 US source', messages[0])
+        self.assertIn('CRYPTO', messages[0])
+        self.assertIn('10 min ago', messages[0])
+        self.assertIn(india_article.url, messages[0])
+        self.assertIn(us_article.url, messages[0])
+        self.assertIn('Public reporting only', messages[0])
+
+    def test_long_digest_splits_below_telegram_limit(self):
+        articles = tuple(
+            self.make_article(
+                f'{region} stocks rally',
+                region=region,
+                url_suffix=f'{region}-' + ('x' * 1700),
+            )
+            for region in ('GB', 'IN', 'AU', 'JP', 'HK', 'US', 'GLOBAL')
+        )
+
+        messages = format_digest(articles, self.now)
+
+        self.assertGreater(len(messages), 1)
+        self.assertTrue(all(len(message) <= 4096 for message in messages))
+
+    def test_empty_digest_has_no_messages(self):
+        self.assertEqual(format_digest((), self.now), ())
 
 
 if __name__ == '__main__':
