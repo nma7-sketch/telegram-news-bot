@@ -15,12 +15,18 @@ repository spotlight to Telegram every two hours (UTC). It uses the built-in
 GitHub Actions token plus the existing Telegram secrets and can also be run
 manually from the Actions tab.
 
-## 30-Minute Brain Break
+## 30-Minute Market News
 
-The **30-Minute Brain Break** workflow sends a rotating multiple-choice puzzle,
-answer, and short explanation to Telegram every 30 minutes (UTC). Questions
-are built in, so no additional API or secrets are needed. It can also be run
-manually from the Actions tab.
+The **30-Minute Market News** workflow shares recent public news about stocks,
+finance, oil, crypto, and currencies every 30 minutes (UTC). It reads public
+RSS headlines and links from outlets in the US, UK, India, Australia, and
+Japan, Hong Kong, and global finance/crypto publications; the flag identifies
+the outlet's country or global edition, not necessarily the event's location.
+It rejects items older than 24 hours, rotates among regions, and keeps seven
+days of duplicate history in the GitHub Actions cache. It uses the existing
+Telegram secrets and can be run manually from the Actions tab. It only uses
+public reporting, including public disclosures when reported by those sources;
+it does not seek or publish non-public insider information.
 
 ## Reddit Learning
 
